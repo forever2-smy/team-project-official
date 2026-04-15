@@ -1,5 +1,6 @@
 name: Sprint 3 - CI 自动化构建与测试
 
+# 触发条件：PR/推送至 develop 分支
 on:
   push:
     branches: [ develop ]
@@ -10,23 +11,31 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     steps:
+      # 1. 拉取代码
       - name: 检出代码
         uses: actions/checkout@v4
 
+      # 2. 安装 Node.js（彻底关闭缓存，完全不依赖锁文件）
       - name: 设置 Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          # 关键修复：禁用自动缓存，因为项目没有 lock 文件
-          cache: 'none' 
+          # 关键：完全禁用缓存，彻底绕开锁文件校验
+          cache: false
 
+      # 3. 安装依赖（用 install 而非 ci，不需要锁文件）
       - name: 安装项目依赖
-        # 关键修复：使用 npm install 而非 npm ci，install 不需要 lock 文件
         run: npm install
 
+      # 4. 测试步骤（无测试也不失败）
       - name: 执行单元测试
-        # 如果没有测试，直接返回成功，不阻断流水线
-        run: npm test || echo "ℹ️ 暂无测试用例，已跳过"
+        run: |
+          if [ -f package.json ] && grep -q '"test"' package.json; then
+            npm test
+          else
+            echo "ℹ️ 项目未配置测试脚本，跳过测试步骤"
+          fi
 
-      - name: 构建成功
-        run: echo "✅ Sprint 3 CI 流水线运行完成"
+      # 5. 最终成功标记
+      - name: 构建完成
+        run: echo "✅ Sprint 3 CI 流水线执行成功，Green Build 达成"
