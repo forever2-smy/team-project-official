@@ -14,6 +14,8 @@ const io = socketIo(server, {
 
 app.use(cors());
 app.use(express.static('public'));
+app.use('/mock', express.static('public'));
+app.use('/mock-game-client.js', express.static('mock/mock-game-client.js'));
 
 // 游戏状态
 const gameState = {
