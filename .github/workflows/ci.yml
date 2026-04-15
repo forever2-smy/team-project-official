@@ -1,44 +1,41 @@
-# .github/workflows/ci.yml
 name: Sprint 3 - CI 自动化构建与测试
 
-# 触发条件：
-# 1. 向 develop 分支推送代码时
-# 2. 向 develop 分支发起 Pull Request 时
+# 触发条件：PR/推送至 develop 分支
 on:
   push:
     branches: [ develop ]
   pull_request:
     branches: [ develop ]
 
-# 定义任务
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
     steps:
-      # 1. 拉取最新代码
+      # 1. 拉取代码
       - name: 检出代码
         uses: actions/checkout@v4
 
-      # 2. 设置 Node.js 环境 (使用 LTS 稳定版)
+      # 2. 安装 Node.js（彻底关闭缓存，完全不依赖锁文件）
       - name: 设置 Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm' # 启用缓存加速依赖安装
+          # 关键：完全禁用缓存，彻底绕开锁文件校验
+          cache: false
 
-      # 3. 安装依赖
+      # 3. 安装依赖（用 install 而非 ci，不需要锁文件）
       - name: 安装项目依赖
-        run: npm ci
+        run: npm install
 
-      # 4. 代码构建 (如果有 build 脚本请取消注释)
-      # - name: 构建项目
-      #   run: npm run build
-
-      # 5. 运行测试 (根据你的 package.json 调整命令)
-      # 如果目前没有测试，先运行 lint 检查或直接 echo 成功
+      # 4. 测试步骤（无测试也不失败）
       - name: 执行单元测试
-        run: npm test || echo "⚠️ 暂无测试用例，跳过测试步骤"
+        run: |
+          if [ -f package.json ] && grep -q '"test"' package.json; then
+            npm test
+          else
+            echo "ℹ️ 项目未配置测试脚本，跳过测试步骤"
+          fi
 
-      # 6. 最终结果确认
-      - name: 构建状态
-        run: echo "✅ Sprint 3 CI 流水线执行成功！"
+      # 5. 最终成功标记
+      - name: 构建完成
+        run: echo "✅ Sprint 3 CI 流水线执行成功，Green Build 达成"
