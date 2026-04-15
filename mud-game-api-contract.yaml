@@ -1,0 +1,460 @@
+openapi: 3.0.3
+info:
+  title: MUD 游戏 API 契约
+  description: |
+    图形化 MUD (Multi-User Dungeon) 游戏原型的前后端接口契约
+
+    📋 接口架构:
+    - WebSocket (Socket.IO): 实时游戏交互
+    - HTTP RESTful: 静态资源服务
+
+    🎮 核心功能:
+    - 玩家管理 (加入/离开/移动)
+    - 实时聊天系统
+    - 游戏状态同步
+    - 地图系统
+
+    📖 作为 Mock 开发与集成联调的"法定依据"
+  version: 1.0.0
+  contact:
+    name: MUD 游戏开发团队
+    email: dev@mudgame.com
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:3001
+    description: 本地开发环境
+  - url: https://api.mudgame.com
+    description: 生产环境
+
+tags:
+  - name: websocket
+    description: WebSocket 实时通信
+  - name: game
+    description: 游戏核心功能
+  - name: chat
+    description: 聊天系统
+  - name: player
+    description: 玩家管理
+  - name: http
+    description: HTTP 接口
+
+components:
+  schemas:
+    # ===== 基础数据模型 =====
+    Player:
+      type: object
+      required: [id, name, x, y, color]
+      properties:
+        id:
+          type: string
+          description: 玩家唯一ID (Socket.IO ID)
+          example: "#abc123"
+        name:
+          type: string
+          description: 玩家昵称 (1-20字符)
+          minLength: 1
+          maxLength: 20
+          example: "勇敢的冒险者"
+        x:
+          type: number
+          description: X坐标 (0-770)
+          minimum: 0
+          maximum: 770
+          example: 100.5
+        y:
+          type: number
+          description: Y坐标 (0-570)
+          minimum: 0
+          maximum: 570
+          example: 200.5
+        color:
+          type: string
+          description: 玩家颜色 (HSL格式)
+          pattern: "^hsl\\(\\d{1,3}, \\d{1,3}%, \\d{1,3}%\\)$"
+          example: "hsl(200, 70%, 60%)"
+        lastUpdate:
+          type: integer
+          description: 最后更新时间戳
+          example: 1679888400000
+
+    ChatMessage:
+      type: object
+      required: [id, player, text, timestamp, type]
+      properties:
+        id:
+          type: integer
+          description: 消息ID (时间戳)
+          example: 1679888400000
+        player:
+          type: string
+          description: 发送者名称
+          example: "冒险者"
+        text:
+          type: string
+          description: 消息内容 (1-200字符)
+          minLength: 1
+          maxLength: 200
+          example: "大家好！"
+        timestamp:
+          type: string
+          description: 发送时间 (HH:mm:ss)
+          pattern: "^\\d{2}:\\d{2}:\\d{2}$"
+          example: "14:30:25"
+        type:
+          type: string
+          description: 消息类型
+          enum: [chat, system]
+          example: "chat"
+
+    MapTile:
+      type: object
+      required: [x, y, type, walkable]
+      properties:
+        x:
+          type: number
+          description: 瓦片X坐标
+          example: 0
+        y:
+          type: number
+          description: 瓦片Y坐标
+          example: 0
+        type:
+          type: string
+          description: 瓦片类型
+          enum: [grass, water]
+          example: "grass"
+        walkable:
+          type: boolean
+          description: 是否可通行
+          example: true
+
+    GameState:
+      type: object
+      required: [players, map, messages]
+      properties:
+        players:
+          type: object
+          description: 所有在线玩家
+          additionalProperties:
+            $ref: '#/components/schemas/Player'
+        map:
+          type: object
+          required: [width, height, tiles]
+          properties:
+            width:
+              type: integer
+              description: 地图宽度
+              example: 800
+            height:
+              type: integer
+              description: 地图高度
+              example: 600
+            tiles:
+              type: array
+              items:
+                $ref: '#/components/schemas/MapTile'
+        messages:
+          type: array
+          description: 最近聊天记录 (最多10条)
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/ChatMessage'
+
+    # ===== 请求数据模型 =====
+    PlayerJoinRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: 玩家昵称
+          minLength: 1
+          maxLength: 20
+          example: "勇敢的冒险者"
+
+    PlayerMoveRequest:
+      type: object
+      required: [dx, dy]
+      properties:
+        dx:
+          type: number
+          description: X轴移动距离 (-50到50)
+          minimum: -50
+          maximum: 50
+          example: 10
+        dy:
+          type: number
+          description: Y轴移动距离 (-50到50)
+          minimum: -50
+          maximum: 50
+          example: -10
+
+    ChatMessageRequest:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          description: 聊天消息内容
+          minLength: 1
+          maxLength: 200
+          example: "Hello, 世界！"
+
+    PlayerMoveData:
+      type: object
+      required: [id, x, y]
+      properties:
+        id:
+          type: string
+          description: 玩家ID
+          example: "#abc123"
+        x:
+          type: number
+          description: 新X坐标
+          example: 150.5
+        y:
+          type: number
+          description: 新Y坐标
+          example: 250.5
+
+    HealthStatus:
+      type: object
+      required: [status, timestamp]
+      properties:
+        status:
+          type: string
+          enum: [ok, error, maintenance]
+          example: "ok"
+        timestamp:
+          type: integer
+          description: 当前时间戳
+          example: 1679888400000
+        uptime:
+          type: number
+          description: 服务运行时间(秒)
+          example: 1234.56
+
+  # ===== WebSocket 事件定义 =====
+  messages:
+    # 客户端 -> 服务器
+    PlayerJoin:
+      name: player-join
+      summary: 玩家加入游戏
+      payload:
+        $ref: '#/components/schemas/PlayerJoinRequest'
+
+    PlayerMove:
+      name: player-move
+      summary: 玩家移动
+      payload:
+        $ref: '#/components/schemas/PlayerMoveRequest'
+
+    SendMessage:
+      name: send-message
+      summary: 发送聊天消息
+      payload:
+        $ref: '#/components/schemas/ChatMessageRequest'
+
+    # 服务器 -> 客户端
+    Connect:
+      name: connect
+      summary: 连接成功
+      payload:
+        type: object
+        properties:
+          sid:
+            type: string
+            description: Socket.IO 会话ID
+
+    Disconnect:
+      name: disconnect
+      summary: 断开连接
+      payload:
+        type: string
+        description: 断开原因
+
+    ConnectError:
+      name: connect_error
+      summary: 连接错误
+      payload:
+        type: object
+        properties:
+          code:
+            type: integer
+            example: 400
+          message:
+            type: string
+            example: "连接失败"
+
+    GameStateUpdate:
+      name: game-state
+      summary: 游戏状态更新
+      payload:
+        $ref: '#/components/schemas/GameState'
+
+    PlayerJoined:
+      name: player-joined
+      summary: 新玩家加入通知
+      payload:
+        $ref: '#/components/schemas/Player'
+
+    PlayerMoved:
+      name: player-moved
+      summary: 玩家移动通知
+      payload:
+        $ref: '#/components/schemas/PlayerMoveData'
+
+    NewMessage:
+      name: new-message
+      summary: 新聊天消息
+      payload:
+        $ref: '#/components/schemas/ChatMessage'
+
+    PlayerLeft:
+      name: player-left
+      summary: 玩家离开通知
+      payload:
+        type: string
+        description: 离开的玩家ID
+
+# ===== WebSocket 通道 =====
+channels:
+  /:
+    description: 游戏主通道
+    subscribe:
+      message:
+        oneOf:
+          - $ref: '#/components/messages/Connect'
+          - $ref: '#/components/messages/Disconnect'
+          - $ref: '#/components/messages/ConnectError'
+          - $ref: '#/components/messages/GameStateUpdate'
+          - $ref: '#/components/messages/PlayerJoined'
+          - $ref: '#/components/messages/PlayerMoved'
+          - $ref: '#/components/messages/NewMessage'
+          - $ref: '#/components/messages/PlayerLeft'
+    publish:
+      message:
+        oneOf:
+          - $ref: '#/components/messages/PlayerJoin'
+          - $ref: '#/components/messages/PlayerMove'
+          - $ref: '#/components/messages/SendMessage'
+
+# ===== HTTP 接口 =====
+paths:
+  /:
+    get:
+      summary: 获取游戏主页
+      description: 返回游戏主页面 HTML
+      tags: [http]
+      responses:
+        '200':
+          description: 成功返回游戏页面
+          content:
+            text/html:
+              example: "<!DOCTYPE html><html>...</html>"
+
+  /health:
+    get:
+      summary: 服务健康检查
+      description: 检查服务器健康状态
+      tags: [http]
+      responses:
+        '200':
+          description: 服务正常
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /socket.io/{resourcePath}:
+    get:
+      summary: Socket.IO 资源
+      description: 提供 Socket.IO 客户端库
+      tags: [http]
+      parameters:
+        - name: resourcePath
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 成功返回资源
+          content:
+            application/javascript:
+              example: "(function(){...})();"
+
+# ===== 接口时序说明 =====
+x-interface-sequences:
+  player_join:
+    description: 玩家加入游戏完整流程
+    steps:
+      - client: socket.emit('player-join', { name: '玩家名' })
+        server: socket.on('player-join', (data) => { ... })
+        description: 客户端发送加入请求
+      - client: socket.on('game-state', (state) => { ... })
+        server: socket.emit('game-state', gameState)
+        description: 服务器返回完整游戏状态
+      - client: socket.on('player-joined', (player) => { ... })
+        server: socket.broadcast.emit('player-joined', player)
+        description: 服务器广播新玩家加入
+
+  player_move:
+    description: 玩家移动流程
+    steps:
+      - client: socket.emit('player-move', { dx: 10, dy: 0 })
+        server: socket.on('player-move', (data) => { ... })
+        description: 客户端发送移动请求
+      - client: socket.on('player-moved', (data) => { ... })
+        server: socket.broadcast.emit('player-moved', data)
+        description: 服务器广播移动信息
+
+  chat_message:
+    description: 聊天消息流程
+    steps:
+      - client: socket.emit('send-message', { text: '消息内容' })
+        server: socket.on('send-message', (data) => { ... })
+        description: 客户端发送聊天消息
+      - client: socket.on('new-message', (message) => { ... })
+        server: io.emit('new-message', message)
+        description: 服务器广播消息给所有人
+
+# ===== 业务规则 =====
+x-business-rules:
+  player_management:
+    - 昵称长度限制: 1-20个字符
+    - 坐标范围: X(0-770), Y(0-570)
+    - 超时清理: 30秒无活动自动清理
+    - 颜色分配: 服务器自动分配随机HSL颜色
+
+  chat_system:
+    - 消息长度: 1-200字符
+    - 历史记录: 保留最近10条消息
+    - 系统消息: 自动生加入/离开通知
+
+  map_system:
+    - 地图尺寸: 800x600像素
+    - 网格系统: 20x20网格，40x40像素/瓦片
+    - 地形分布: 80%草地，20%水域
+
+# ===== Mock 配置 =====
+x-mock-config:
+  server: "http://localhost:3001"
+  websocket: "ws://localhost:3001"
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://127.0.0.1:3000"
+  response_delays:
+    connection: 100
+    player_join: 100
+    player_move: 50
+    chat_message: 30
+  test_scenarios:
+    - name: 正常加入游戏
+      steps: [connect, player-join, expect-game-state]
+    - name: 玩家移动
+      steps: [player-move, expect-player-moved]
+    - name: 发送消息
+      steps: [send-message, expect-new-message]
