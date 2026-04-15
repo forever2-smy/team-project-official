@@ -1,0 +1,95 @@
+openapi: 3.0.0
+info:
+  title: MUD 游戏后端接口文档
+  version: 1.0.0
+  description: 软件工程6组MUD项目前后端接口契约，作为开发/联调法定依据
+servers:
+  - url: http://localhost:3001
+    description: 本地开发环境
+
+paths:
+  /api/player/join:
+    post:
+      summary: 玩家加入游戏
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [playerName]
+              properties:
+                playerName:
+                  type: string
+                  example: "玩家A"
+      responses:
+        '200':
+          description: 加入成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  playerId:
+                    type: string
+                    example: "123456"
+                  playerName:
+                    type: string
+                  x:
+                    type: number
+                  y:
+                    type: number
+
+  /api/player/move:
+    post:
+      summary: 玩家移动
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [playerId, dx, dy]
+              properties:
+                playerId:
+                  type: string
+                dx:
+                  type: number
+                  example: 1
+                dy:
+                  type: number
+                  example: 0
+      responses:
+        '200':
+          description: 移动成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  x:
+                    type: number
+                  y:
+                    type: number
+        '400':
+          description: 移动失败（越界/不可通行）
+
+  /api/chat/send:
+    post:
+      summary: 发送聊天消息
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [playerId, content]
+              properties:
+                playerId:
+                  type: string
+                content:
+                  type: string
+                  example: "大家好！"
+      responses:
+        '200':
+          description: 发送成功
