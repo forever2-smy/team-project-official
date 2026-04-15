@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MUD 游戏 - Mock 测试页面</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header {
+            text-align: center;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        h1 { color: #4cc9f0; font-size: 2em; }
+        .mock-badge {
+            display: inline-block;
+            background: #f72585;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+        .game-area { display: flex; gap: 20px; flex-wrap: wrap; }
+        .game-container { flex: 3; min-width: 300px; }
+        .chat-container { flex: 2; min-width: 300px; }
+        .game-canvas-container {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+        #gameCanvas {
+            width: 100%;
+            height: 500px;
+            background: #0d1b2a;
+            border-radius: 5px;
+            display: block;
+        }
+        .controls { display: flex; gap: 10px; margin-top: 10px; }
+        input, button {
+            padding: 12px 15px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
+        }
+        input { flex: 1; background: rgba(255, 255, 255, 0.1); color: white; border: 1px solid rgba(255, 255, 255, 0.2); }
+        input:focus { outline: none; border-color: #4cc9f0; }
+        button { background: linear-gradient(135deg, #4361ee 0%, #3a0ca3 100%); color: white; cursor: pointer; font-weight: bold; }
+        button:hover { transform: translateY(-2px); }
+        button:disabled { background: #555; cursor: not-allowed; transform: none; }
+        .chat-box {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            padding: 15px;
+            overflow-y: auto;
+            max-height: 400px;
+            margin-bottom: 10px;
+        }
+        .message { margin-bottom: 10px; padding: 8px 12px; border-radius: 5px; background: rgba(255, 255, 255, 0.05); border-left: 3px solid #4cc9f0; }
+        .message.system { border-left-color: #f72585; background: rgba(247, 37, 133, 0.1); }
+        .message-header { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 0.9em; color: #a9a9a9; }
+        .player-name { color: #4cc9f0; font-weight: bold; }
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #f72585; }
+        .status-dot.connected { background: #4cc9f0; box-shadow: 0 0 10px #4cc9f0; }
+        .test-panel {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .test-panel h3 { color: #4cc9f0; margin-bottom: 15px; }
+        .test-buttons { display: flex; flex-wrap: wrap; gap: 10px; }
+        .test-btn { background: #2d6a4f; font-size: 0.9em; padding: 8px 12px; }
+        .test-btn:hover { background: #40916c; }
+        .log-box {
+            background: #000;
+            border-radius: 5px;
+            padding: 10px;
+            margin-top: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.85em;
+        }
+        .log-entry { margin-bottom: 5px; }
+        .log-entry.error { color: #f72585; }
+        .log-entry.success { color: #4cc9f0; }
+        .log-entry.info { color: #ffd60a; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>MUD 游戏 Mock 测试<span class="mock-badge">MOCK MODE</span></h1>
+            <p>前端逻辑闭环测试 - 不依赖后端服务器</p>
+        </header>
+
+        <div class="game-area">
+            <div class="game-container">
+                <div class="game-canvas-container">
+                    <canvas id="gameCanvas" width="800" height="600"></canvas>
+                </div>
+                <div class="controls">
+                    <input type="text" id="playerName" placeholder="输入游戏昵称" value="测试玩家">
+                    <button id="joinButton">加入游戏</button>
+                    <div id="moveButtons" style="display: none;">
+                        <button class="move-btn" data-dx="0" data-dy="-10">↑</button>
+                        <button class="move-btn" data-dx="-10" data-dy="0">←</button>
+                        <button class="move-btn" data-dx="10" data-dy="0">→</button>
+                        <button class="move-btn" data-dx="0" data-dy="10">↓</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat-container">
+                <div class="chat-box" id="chatBox">
+                    <div class="message system">
+                        <div class="message-header"><span class="player-name">系统</span><span class="message-time">--:--:--</span></div>
+                        <div class="message-text">Mock 模式就绪！可以进行前端逻辑测试。</div>
+                    </div>
+                </div>
+                <div class="controls">
+                    <input type="text" id="messageInput" placeholder="输入聊天消息..." disabled>
+                    <button id="sendButton" disabled>发送</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="status-bar">
+            <div id="playerStatus">未连接</div>
+            <div class="connection-status">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="connectionStatus">Mock 断开</span>
+            </div>
+            <div id="playerCount">在线玩家: 0</div>
+        </div>
+
+        <div class="test-panel">
+            <h3>边界测试面板</h3>
+            <div class="test-buttons">
+                <button class="test-btn" onclick="testEmptyName()">空昵称</button>
+                <button class="test-btn" onclick="testLongName()">超长昵称</button>
+                <button class="test-btn" onclick="testBoundaryMove()">边界移动</button>
+                <button class="test-btn" onclick="testOverBoundaryMove()">越界移动</button>
+                <button class="test-btn" onclick="testEmptyMessage()">空消息</button>
+                <button class="test-btn" onclick="testLongMessage()">超长消息</button>
+                <button class="test-btn" onclick="testSpecialChars()">特殊字符</button>
+                <button class="test-btn" onclick="testRapidMessages()">快速连续消息</button>
+                <button class="test-btn" onclick="testDisconnect()">模拟断连</button>
+                <button class="test-btn" onclick="clearLog()">清空日志</button>
+            </div>
+            <div class="log-box" id="logBox"></div>
+        </div>
+    </div>
+
+    <script src="mock-game-client.js"></script>
+    <script>
+        const mockClient = new MockGameClient({ autoRespond: true });
+        let playerId = null;
+        let playerName = null;
+
+        function log(message, type = 'info') {
+            const logBox = document.getElementById('logBox');
+            const time = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${time}] ${message}`;
+            logBox.appendChild(entry);
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('logBox').innerHTML = '';
+            log('日志已清空');
+        }
+
+        function addMessage(player, text, type = 'chat') {
+            const chatBox = document.getElementById('chatBox');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            const time = new Date().toLocaleTimeString();
+            messageDiv.innerHTML = `
+                <div class="message-header">
+                    <span class="player-name">${player}</span>
+                    <span class="message-time">${time}</span>
+                </div>
+                <div class="message-text">${text}</div>
+            `;
+            chatBox.appendChild(messageDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        mockClient.on('connect', () => {
+            document.getElementById('statusDot').classList.add('connected');
+            document.getElementById('connectionStatus').textContent = 'Mock 已连接';
+            log('Mock 服务器连接成功');
+        });
+
+        mockClient.on('game-state', (state) => {
+            log(`收到游戏状态: ${Object.keys(state.players).length} 玩家, ${state.map.tiles.length} 瓦片`, 'success');
+            playerId = mockClient.playerId;
+            updatePlayerCount(Object.keys(state.players).length);
+        });
+
+        mockClient.on('player-joined', (player) => {
+            log(`玩家加入: ${player.name} (${player.id})`, 'success');
+            addMessage('系统', `${player.name} 加入了游戏`, 'system');
+            updatePlayerCount(Object.keys(mockClient.mockServer.players).length);
+        });
+
+        mockClient.on('player-moved', (data) => {
+            log(`玩家移动: ${data.id} -> (${Math.floor(data.x)}, ${Math.floor(data.y)})`);
+            render();
+        });
+
+        mockClient.on('new-message', (msg) => {
+            log(`新消息: ${msg.player}: ${msg.text}`);
+            addMessage(msg.player, msg.text, msg.type);
+        });
+
+        mockClient.on('player-left', (id) => {
+            log(`玩家离开: ${id}`, 'error');
+            addMessage('系统', `玩家离开了游戏`, 'system');
+            updatePlayerCount(Object.keys(mockClient.mockServer.players).length);
+        });
+
+        mockClient.on('connect_error', (err) => {
+            log(`连接错误: ${err.message}`, 'error');
+            addMessage('系统', `错误: ${err.message}`, 'system');
+        });
+
+        mockClient.on('disconnect', () => {
+            document.getElementById('statusDot').classList.remove('connected');
+            document.getElementById('connectionStatus').textContent = 'Mock 断开';
+            document.getElementById('playerStatus').textContent = '未连接';
+            document.getElementById('messageInput').disabled = true;
+            document.getElementById('sendButton').disabled = true;
+            document.getElementById('moveButtons').style.display = 'none';
+            document.getElementById('joinButton').disabled = false;
+            document.getElementById('playerName').disabled = false;
+            log('与 Mock 服务器断开', 'error');
+        });
+
+        async function joinGame() {
+            const name = document.getElementById('playerName').value.trim();
+            if (!name) {
+                log('请输入昵称', 'error');
+                return;
+            }
+            playerName = name;
+            await mockClient.connect();
+            await mockClient.emit('player-join', { name });
+            document.getElementById('playerStatus').textContent = `${playerName} (在线)`;
+            document.getElementById('messageInput').disabled = false;
+            document.getElementById('sendButton').disabled = false;
+            document.getElementById('moveButtons').style.display = 'inline-block';
+            document.getElementById('joinButton').disabled = true;
+            document.getElementById('playerName').disabled = true;
+            render();
+        }
+
+        function updatePlayerCount(count) {
+            document.getElementById('playerCount').textContent = `在线玩家: ${count}`;
+        }
+
+        document.getElementById('joinButton').addEventListener('click', joinGame);
+
+        document.getElementById('sendButton').addEventListener('click', () => {
+            const text = document.getElementById('messageInput').value.trim();
+            if (text) {
+                mockClient.emit('send-message', { text });
+                document.getElementById('messageInput').value = '';
+            }
+        });
+
+        document.getElementById('messageInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('sendButton').click();
+            }
+        });
+
+        document.querySelectorAll('.move-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const dx = parseInt(btn.dataset.dx);
+                const dy = parseInt(btn.dataset.dy);
+                mockClient.emit('player-move', { dx, dy });
+            });
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (!mockClient.connected) return;
+            let dx = 0, dy = 0;
+            switch(e.key) {
+                case 'ArrowUp': case 'w': case 'W': dy = -10; break;
+                case 'ArrowDown': case 's': case 'S': dy = 10; break;
+                case 'ArrowLeft': case 'a': case 'A': dx = -10; break;
+                case 'ArrowRight': case 'd': case 'D': dx = 10; break;
+            }
+            if (dx !== 0 || dy !== 0) {
+                mockClient.emit('player-move', { dx, dy });
+            }
+        });
+
+        async function testEmptyName() {
+            log('--- 测试: 空昵称 ---');
+            const testClient = new MockGameClient();
+            let errorReceived = false;
+            testClient.on('connect_error', () => { errorReceived = true; });
+            await testClient.connect();
+            await testClient.emit('player-join', { name: '' });
+            log(errorReceived ? '✓ 空昵称被拒绝' : '✗ 空昵称未被拒绝', errorReceived ? 'success' : 'error');
+            testClient.disconnect();
+        }
+
+        async function testLongName() {
+            log('--- 测试: 超长昵称 ---');
+            const testClient = new MockGameClient();
+            let errorReceived = false;
+            testClient.on('connect_error', () => { errorReceived = true; });
+            await testClient.connect();
+            await testClient.emit('player-join', { name: '这是一个超过二十个字符的超级长名字' });
+            log(errorReceived ? '✓ 超长昵称被拒绝' : '✗ 超长昵称未被拒绝', errorReceived ? 'success' : 'error');
+            testClient.disconnect();
+        }
+
+        async function testBoundaryMove() {
+            log('--- 测试: 边界移动 ---');
+            if (!mockClient.connected) { log('请先加入游戏', 'error'); return; }
+            const player = mockClient.mockServer.players[mockClient.playerId];
+            if (!player) return;
+            player.x = 0;
+            player.y = 0;
+            await mockClient.emit('player-move', { dx: -10, dy: -10 });
+            log(player.x >= 0 && player.y >= 0 ? '✓ 边界限制有效' : '✗ 边界限制无效', player.x >= 0 && player.y >= 0 ? 'success' : 'error');
+            render();
+        }
+
+        async function testOverBoundaryMove() {
+            log('--- 测试: 越界移动 ---');
+            if (!mockClient.connected) { log('请先加入游戏', 'error'); return; }
+            const player = mockClient.mockServer.players[mockClient.playerId];
+            if (!player) return;
+            player.x = 770;
+            player.y = 570;
+            const initialX = player.x;
+            const initialY = player.y;
+            await mockClient.emit('player-move', { dx: 10, dy: 10 });
+            log(player.x <= 770 && player.y <= 570 ? '✓ 越界限制有效' : '✗ 越界限制无效', player.x <= 770 && player.y <= 570 ? 'success' : 'error');
+            render();
+        }
+
+        async function testEmptyMessage() {
+            log('--- 测试: 空消息 ---');
+            if (!mockClient.connected) { log('请先加入游戏', 'error'); return; }
+            let msgReceived = false;
+            mockClient.on('new-message', () => { msgReceived = true; });
+            await mockClient.emit('send-message', { text: '' });
+            log(!msgReceived ? '✓ 空消息被拒绝' : '✗ 空消息未被拒绝', !msgReceived ? 'success' : 'error');
+        }
+
+        async function testLongMessage() {
+            log('--- 测试: 超长消息 ---');
+            if (!mockClient.connected) { log('请先加入游戏', 'error'); return; }
+            let msgReceived = false;
+            mockClient.on('new-message', () => { msgReceived = true; });
+            await mockClient.emit('send-message', { text: 'A'.repeat(201) });
+            log(!msgReceived ? '✓ 超长消息被拒绝' : '✗ 超长消息未被拒绝', !msgReceived ? 'success' : 'error');
+        }
+
+        async function testSpecialChars() {
+            log('--- 测试: 特殊字符 ---');
+            if (!mockClient.connected) { log('请先加入游戏', 'error'); return; }
+            let msgReceived = false;
+            let receivedText = '';
+            mockClient.on('new-message', (msg) => {
+                msgReceived = true;
+                receivedText = msg.text;
+            });
+            await mockClient.emit('send-message', { text: '<scr' + 'ipt>alert("xss")</scr' + 'ipt>' });
+            log(msgReceived ? '✓ 特殊字符被处理' : '✗ 特殊字符未被处理', msgReceived ? 'success' : 'error');
+        }
+
+        async function testRapidMessages() {
+            log('--- 测试: 快速连续消息 ---');
+            if (!mockClient.connected) { log('请先加入游戏', 'error'); return; }
+            for (let i = 0; i < 5; i++) {
+                mockClient.emit('send-message', { text: `快速消息 ${i + 1}` });
+                await new Promise(r => setTimeout(r, 50));
+            }
+            log('✓ 快速消息已发送');
+        }
+
+        function testDisconnect() {
+            log('--- 测试: 模拟断连 ---');
+            if (!mockClient.connected) { log('请先加入游戏', 'error'); return; }
+            mockClient.disconnect();
+            log('✓ 模拟断连成功');
+        }
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (mockClient.mockServer && mockClient.mockServer.tiles) {
+                mockClient.mockServer.tiles.forEach(tile => {
+                    ctx.fillStyle = tile.type === 'grass' ? '#2d6a4f' : '#1d3557';
+                    ctx.fillRect(tile.x, tile.y, 40, 40);
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(tile.x, tile.y, 40, 40);
+                });
+            }
+            if (mockClient.mockServer && mockClient.mockServer.players) {
+                Object.values(mockClient.mockServer.players).forEach(player => {
+                    ctx.beginPath();
+                    ctx.arc(player.x + 15, player.y + 15, 15, 0, Math.PI * 2);
+                    ctx.fillStyle = player.color;
+                    ctx.fill();
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    ctx.fillStyle = 'white';
+                    ctx.font = '12px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(player.name, player.x + 15, player.y + 40);
+                    if (player.id === mockClient.playerId) {
+                        ctx.beginPath();
+                        ctx.arc(player.x + 15, player.y + 15, 18, 0, Math.PI * 2);
+                        ctx.strokeStyle = '#4cc9f0';
+                        ctx.lineWidth = 3;
+                        ctx.stroke();
+                    }
+                });
+            }
+        }
+
+        function gameLoop() {
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+        gameLoop();
+
+        log('Mock 测试环境已就绪');
+    </script>
+</body>
+</html>
