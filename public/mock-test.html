@@ -395,7 +395,7 @@
                 msgReceived = true;
                 receivedText = msg.text;
             });
-            await mockClient.emit('send-message', { text: '<script>alert("xss")</script>' });
+            await mockClient.emit('send-message', { text: '<scr' + 'ipt>alert("xss")</scr' + 'ipt>' });
             log(msgReceived ? '✓ 特殊字符被处理' : '✗ 特殊字符未被处理', msgReceived ? 'success' : 'error');
         }
 
