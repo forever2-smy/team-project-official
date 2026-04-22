@@ -1,39 +1,28 @@
-name: Sprint 3 - CI 自动化构建与测试 (无锁文件终极版)
+name: Sprint 3 - CI 自动化构建与测试
 
 on:
   push:
-    branches: [ develop ]
+    branches: [ develop, main ]
   pull_request:
-    branches: [ develop ]
+    branches: [ develop, main ]
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      # 1. 直接安装指定版本 Node.js，完全不配置 cache 参数
       - name: 设置 Node.js 环境
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          # 关键：彻底不写 cache 参数，强制 setup-node 不做任何依赖缓存操作
-          # 这样它就不会去查找 package-lock.json
 
-      # 2. 直接运行 npm install，忽略锁文件警告
       - name: 安装项目依赖
-        run: npm install --no-lockfile # --no-lockfile 强制不生成/不依赖 lock 文件
+        run: npm install --no-lockfile
 
-      # 3. 跑测试 (无测试则跳过)
-      - name: 执行单元测试
-        run: |
-          if grep -q '"test"' package.json; then
-            npm test
-          else
-            echo "ℹ️ 项目未配置测试脚本，跳过执行"
-          fi
+      - name: 执行 TDD 单元测试
+        run: npm test
 
-      # 4. 最终标记
       - name: 构建成功
         run: echo "✅ Green Build 达成！Sprint 3 任务完成"
