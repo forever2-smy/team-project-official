@@ -2,7 +2,6 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
-const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
@@ -13,16 +12,12 @@ const io = socketIo(server, {
   }
 });
 
-// 1. 把静态目录改成当前项目根目录
-app.use(express.static(__dirname));
 app.use(cors());
+app.use(express.static('public'));
+app.use('/mock', express.static('public'));
+app.use('/mock-game-client.js', express.static('mock/mock-game-client.js'));
 
-// 2. 首页路由，访问 / 时返回 index.html
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-// 下面是你原来的所有代码，完全不动！
+// 游戏状态
 const gameState = {
   players: {},
   messages: [],
@@ -33,6 +28,7 @@ const gameState = {
   }
 };
 
+// 初始化地图
 function initMap() {
   const tiles = [];
   for (let y = 0; y < 20; y++) {
@@ -50,9 +46,11 @@ function initMap() {
 
 initMap();
 
+// Socket.io 连接处理
 io.on('connection', (socket) => {
   console.log('新玩家连接:', socket.id);
 
+  // 新玩家加入
   socket.on('player-join', (playerData) => {
     const playerId = socket.id;
     gameState.players[playerId] = {
@@ -64,14 +62,17 @@ io.on('connection', (socket) => {
       lastUpdate: Date.now()
     };
 
+    // 发送当前游戏状态给新玩家
     socket.emit('game-state', {
       players: gameState.players,
       map: gameState.map,
-      messages: gameState.messages.slice(-10)
+      messages: gameState.messages.slice(-10) // 最近10条消息
     });
 
+    // 广播新玩家加入
     socket.broadcast.emit('player-joined', gameState.players[playerId]);
     
+    // 发送欢迎消息
     const welcomeMsg = {
       id: Date.now(),
       player: '系统',
@@ -83,9 +84,11 @@ io.on('connection', (socket) => {
     io.emit('new-message', welcomeMsg);
   });
 
+  // 玩家移动
   socket.on('player-move', (moveData) => {
     const player = gameState.players[socket.id];
     if (player) {
+      // 简单边界检查
       const newX = player.x + moveData.dx;
       const newY = player.y + moveData.dy;
       
@@ -95,6 +98,7 @@ io.on('connection', (socket) => {
         player.y = newY;
         player.lastUpdate = Date.now();
         
+        // 广播玩家位置更新
         socket.broadcast.emit('player-moved', {
           id: socket.id,
           x: player.x,
@@ -104,6 +108,7 @@ io.on('connection', (socket) => {
     }
   });
 
+  // 发送聊天消息
   socket.on('send-message', (messageData) => {
     const player = gameState.players[socket.id];
     if (player && messageData.text.trim()) {
@@ -119,11 +124,14 @@ io.on('connection', (socket) => {
     }
   });
 
+  // 玩家断开连接
   socket.on('disconnect', () => {
     const player = gameState.players[socket.id];
     if (player) {
+      // 广播玩家离开
       socket.broadcast.emit('player-left', socket.id);
       
+      // 发送离开消息
       const leaveMsg = {
         id: Date.now(),
         player: '系统',
@@ -134,15 +142,17 @@ io.on('connection', (socket) => {
       gameState.messages.push(leaveMsg);
       io.emit('new-message', leaveMsg);
       
+      // 从游戏状态中移除
       delete gameState.players[socket.id];
     }
     console.log('玩家断开连接:', socket.id);
   });
 });
 
+// 定期清理不活跃玩家
 setInterval(() => {
   const now = Date.now();
-  const timeout = 30000;
+  const timeout = 30000; // 30秒
   Object.keys(gameState.players).forEach(playerId => {
     if (now - gameState.players[playerId].lastUpdate > timeout) {
       delete gameState.players[playerId];
