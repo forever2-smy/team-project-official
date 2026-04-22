@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
+const path = require('path'); // <-- 只加这行
 
 const app = express();
 const server = http.createServer(app);
@@ -10,6 +11,13 @@ const io = socketIo(server, {
     origin: "http://localhost:3000",
     methods: ["GET", "POST"]
   }
+});
+
+// ======================
+// 只加这一段 不破坏原有代码
+// ======================
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 app.use(cors());
