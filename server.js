@@ -25,7 +25,15 @@ const gameState = {
     width: 800,
     height: 600,
     tiles: []
-  }
+  },
+  // 新增：战斗和交易系统
+  items: {
+    'sword_001': { id: 'sword_001', name: '铁剑', type: 'weapon', attack: 25, defense: 0, price: 100 },
+    'shield_001': { id: 'shield_001', name: '木盾', type: 'armor', attack: 0, defense: 15, price: 80 },
+    'potion_001': { id: 'potion_001', name: '生命药水', type: 'consumable', effect: { health: 50 }, price: 30 }
+  },
+  playerInventory: {},
+  combatHistory: []
 };
 
 // 初始化地图

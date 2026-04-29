@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<coverage generated="1777469346436" clover="3.2.0">
+  <project timestamp="1777469346436" name="All files">
+    <metrics statements="32" coveredstatements="32" conditionals="29" coveredconditionals="29" methods="3" coveredmethods="3" elements="64" coveredelements="64" complexity="0" loc="32" ncloc="32" packages="1" files="2" classes="2"/>
+    <file name="combat-system.js" path="D:\vs.code\软件工程实验\combat-system.js">
+      <metrics statements="22" coveredstatements="22" conditionals="19" coveredconditionals="19" methods="2" coveredmethods="2"/>
+      <line num="16" count="28" type="cond" truecount="5" falsecount="0"/>
+      <line num="17" count="3" type="stmt"/>
+      <line num="20" count="25" type="cond" truecount="2" falsecount="0"/>
+      <line num="21" count="1" type="stmt"/>
+      <line num="24" count="24" type="cond" truecount="2" falsecount="0"/>
+      <line num="25" count="1" type="stmt"/>
+      <line num="28" count="23" type="cond" truecount="4" falsecount="0"/>
+      <line num="29" count="2" type="stmt"/>
+      <line num="33" count="21" type="stmt"/>
+      <line num="36" count="21" type="cond" truecount="2" falsecount="0"/>
+      <line num="37" count="4" type="stmt"/>
+      <line num="41" count="21" type="stmt"/>
+      <line num="42" count="21" type="cond" truecount="2" falsecount="0"/>
+      <line num="43" count="4" type="stmt"/>
+      <line num="46" count="17" type="stmt"/>
+      <line num="57" count="4" type="cond" truecount="2" falsecount="0"/>
+      <line num="58" count="2" type="stmt"/>
+      <line num="61" count="2" type="stmt"/>
+      <line num="62" count="2" type="stmt"/>
+      <line num="63" count="4" type="stmt"/>
+      <line num="66" count="2" type="stmt"/>
+      <line num="69" count="1" type="stmt"/>
+    </file>
+    <file name="gold-system.js" path="D:\vs.code\软件工程实验\gold-system.js">
+      <metrics statements="10" coveredstatements="10" conditionals="10" coveredconditionals="10" methods="1" coveredmethods="1"/>
+      <line num="12" count="18" type="cond" truecount="4" falsecount="0"/>
+      <line num="13" count="1" type="stmt"/>
+      <line num="17" count="17" type="cond" truecount="2" falsecount="0"/>
+      <line num="18" count="2" type="stmt"/>
+      <line num="20" count="15" type="cond" truecount="2" falsecount="0"/>
+      <line num="21" count="1" type="stmt"/>
+      <line num="25" count="14" type="cond" truecount="2" falsecount="0"/>
+      <line num="26" count="5" type="stmt"/>
+      <line num="30" count="9" type="stmt"/>
+      <line num="33" count="1" type="stmt"/>
+    </file>
+  </project>
+</coverage>
