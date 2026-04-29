@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>调试测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #1a1a2e; color: white; }
+        .container { max-width: 600px; margin: 0 auto; }
+        input, button { padding: 10px; margin: 5px; border: none; border-radius: 5px; }
+        input { background: rgba(255,255,255,0.1); color: white; width: 200px; }
+        button { background: #4361ee; color: white; cursor: pointer; }
+        button:hover { background: #3a0ca3; }
+        #log {
+            background: #000;
+            padding: 10px;
+            margin-top: 20px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>调试测试页面</h1>
+        <div>
+            <input type="text" id="playerName" placeholder="输入昵称" value="测试玩家">
+            <button id="joinButton">加入游戏</button>
+        </div>
+        <div id="log"></div>
+    </div>
+
+    <script>
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${time}] ${message}<br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        // 测试基本的事件绑定
+        document.addEventListener('DOMContentLoaded', function() {
+            log('页面加载完成');
+
+            const joinButton = document.getElementById('joinButton');
+            const playerNameInput = document.getElementById('playerName');
+
+            log('获取到按钮和输入框元素');
+
+            joinButton.addEventListener('click', function() {
+                log('按钮被点击了！');
+
+                const name = playerNameInput.value.trim();
+                log(`输入的昵称: "${name}"`);
+
+                if (!name) {
+                    log('错误: 昵称为空');
+                    alert('请输入昵称！');
+                    return;
+                }
+
+                log(`尝试加入游戏，昵称: ${name}`);
+
+                // 测试 MockGameClient 是否存在
+                log('MockGameClient 可用，创建实例...');
+
+                try {
+                    // 确保 mock-game-client.js 已加载
+                    const script = document.createElement('script');
+                    script.src = 'public/mock-game-client.js';
+                    script.onload = function() {
+                        log('mock-game-client.js 加载完成');
+                        startGame();
+                    };
+                    script.onerror = function() {
+                        log('加载 mock-game-client.js 失败');
+                        alert('加载客户端脚本失败！');
+                    };
+                    document.head.appendChild(script);
+
+                    function startGame() {
+                        if (typeof MockGameClient === 'undefined') {
+                            log('MockGameClient 仍然未定义');
+                            return;
+                        }
+
+                        const mockClient = new MockGameClient({ autoRespond: true });
+                    log('MockGameClient 实例创建成功');
+
+                    mockClient.on('connect', () => {
+                        log('连接成功');
+                    });
+
+                    mockClient.on('connect_error', (err) => {
+                        log(`连接错误: ${err.message}`);
+                    });
+
+                    log('开始连接...');
+                    mockClient.connect().then(() => {
+                        log('连接完成，发送加入请求');
+                        return mockClient.emit('player-join', { name });
+                    }).then(() => {
+                        log('加入游戏成功！');
+                        alert('加入游戏成功！');
+                    }).catch((error) => {
+                        log(`错误: ${error.message}`);
+                        alert(`错误: ${error.message}`);
+                    });
+
+                } catch (error) {
+                    log(`创建 MockGameClient 失败: ${error.message}`);
+                    alert(`创建失败: ${error.message}`);
+                }
+            });
+
+            log('事件监听器已绑定');
+        });
+    </script>
+</body>
+</html>

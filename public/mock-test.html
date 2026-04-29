@@ -178,6 +178,18 @@
         let playerId = null;
         let playerName = null;
 
+        // 等待 MockGameClient 加载完成
+        function waitForMockClient() {
+            return new Promise((resolve) => {
+                const checkInterval = setInterval(() => {
+                    if (typeof MockGameClient !== 'undefined') {
+                        clearInterval(checkInterval);
+                        resolve();
+                    }
+                }, 100);
+            });
+        }
+
         function log(message, type = 'info') {
             const logBox = document.getElementById('logBox');
             const time = new Date().toLocaleTimeString();
@@ -246,6 +258,12 @@
         mockClient.on('connect_error', (err) => {
             log(`连接错误: ${err.message}`, 'error');
             addMessage('系统', `错误: ${err.message}`, 'system');
+            alert(`连接错误: ${err.message}`);
+
+            // 重置按钮状态
+            const joinButton = document.getElementById('joinButton');
+            joinButton.disabled = false;
+            joinButton.textContent = '加入游戏';
         });
 
         mockClient.on('disconnect', () => {
@@ -264,60 +282,85 @@
             const name = document.getElementById('playerName').value.trim();
             if (!name) {
                 log('请输入昵称', 'error');
+                alert('请输入游戏昵称！');
                 return;
             }
-            playerName = name;
-            await mockClient.connect();
-            await mockClient.emit('player-join', { name });
-            document.getElementById('playerStatus').textContent = `${playerName} (在线)`;
-            document.getElementById('messageInput').disabled = false;
-            document.getElementById('sendButton').disabled = false;
-            document.getElementById('moveButtons').style.display = 'inline-block';
-            document.getElementById('joinButton').disabled = true;
-            document.getElementById('playerName').disabled = true;
-            render();
+
+            const joinButton = document.getElementById('joinButton');
+            joinButton.disabled = true;
+            joinButton.textContent = '连接中...';
+
+            try {
+                playerName = name;
+                await mockClient.connect();
+                await mockClient.emit('player-join', { name });
+
+                document.getElementById('playerStatus').textContent = `${playerName} (在线)`;
+                document.getElementById('messageInput').disabled = false;
+                document.getElementById('sendButton').disabled = false;
+                document.getElementById('moveButtons').style.display = 'inline-block';
+                document.getElementById('playerName').disabled = true;
+                joinButton.textContent = '已加入';
+
+                log(`玩家 ${playerName} 成功加入游戏`, 'success');
+                render();
+            } catch (error) {
+                log(`加入游戏失败: ${error.message}`, 'error');
+                alert(`加入游戏失败: ${error.message}`);
+                joinButton.disabled = false;
+                joinButton.textContent = '加入游戏';
+            }
         }
 
         function updatePlayerCount(count) {
             document.getElementById('playerCount').textContent = `在线玩家: ${count}`;
         }
 
-        document.getElementById('joinButton').addEventListener('click', joinGame);
+        // 事件绑定将在 waitForMockClient 中处理
 
-        document.getElementById('sendButton').addEventListener('click', () => {
-            const text = document.getElementById('messageInput').value.trim();
-            if (text) {
-                mockClient.emit('send-message', { text });
-                document.getElementById('messageInput').value = '';
-            }
-        });
+        // 确保在 MockGameClient 加载完成后才绑定事件
+        waitForMockClient().then(() => {
+            log('MockGameClient 已加载，初始化完成');
 
-        document.getElementById('messageInput').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                document.getElementById('sendButton').click();
-            }
-        });
+            document.getElementById('joinButton').addEventListener('click', joinGame);
 
-        document.querySelectorAll('.move-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const dx = parseInt(btn.dataset.dx);
-                const dy = parseInt(btn.dataset.dy);
-                mockClient.emit('player-move', { dx, dy });
+            document.getElementById('sendButton').addEventListener('click', () => {
+                const text = document.getElementById('messageInput').value.trim();
+                if (text) {
+                    mockClient.emit('send-message', { text });
+                    document.getElementById('messageInput').value = '';
+                }
             });
-        });
 
-        document.addEventListener('keydown', (e) => {
-            if (!mockClient.connected) return;
-            let dx = 0, dy = 0;
-            switch(e.key) {
-                case 'ArrowUp': case 'w': case 'W': dy = -10; break;
-                case 'ArrowDown': case 's': case 'S': dy = 10; break;
-                case 'ArrowLeft': case 'a': case 'A': dx = -10; break;
-                case 'ArrowRight': case 'd': case 'D': dx = 10; break;
-            }
-            if (dx !== 0 || dy !== 0) {
-                mockClient.emit('player-move', { dx, dy });
-            }
+            document.getElementById('messageInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    document.getElementById('sendButton').click();
+                }
+            });
+
+            document.querySelectorAll('.move-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const dx = parseInt(btn.dataset.dx);
+                    const dy = parseInt(btn.dataset.dy);
+                    mockClient.emit('player-move', { dx, dy });
+                });
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (!mockClient.connected) return;
+                let dx = 0, dy = 0;
+                switch(e.key) {
+                    case 'ArrowUp': case 'w': case 'W': dy = -10; break;
+                    case 'ArrowDown': case 's': case 'S': dy = 10; break;
+                    case 'ArrowLeft': case 'a': case 'A': dx = -10; break;
+                    case 'ArrowRight': case 'd': case 'D': dx = 10; break;
+                }
+                if (dx !== 0 || dy !== 0) {
+                    mockClient.emit('player-move', { dx, dy });
+                }
+            });
+
+            log('所有事件监听器已绑定');
         });
 
         async function testEmptyName() {
