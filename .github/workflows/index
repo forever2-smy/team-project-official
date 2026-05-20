@@ -1,0 +1,392 @@
+/**
+ * MUD Game Backend Server
+ * Express + Socket.IO 实现前后端分离架构
+ */
+
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const path = require('path');
+const cors = require('cors');
+const { deductGold } = require('./gold');
+const { calculateDamage, calculateComboDamage } = require('./combat');
+
+const app = express();
+const server = http.createServer(app);
+
+// ===== CORS 配置 =====
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://127.0.0.1:3000', '*'],
+  methods: ['GET', 'POST']
+}));
+app.use(express.json());
+
+// ===== Socket.IO 配置 =====
+const io = new Server(server, {
+  cors: {
+    origin: ['http://localhost:3000', 'http://127.0.0.1:3000', '*'],
+    methods: ['GET', 'POST']
+  }
+});
+
+// ===== 游戏状态 =====
+const MAP_WIDTH = 800;
+const MAP_HEIGHT = 600;
+const GRID_SIZE = 40;
+const COLS = MAP_WIDTH / GRID_SIZE;   // 20
+const ROWS = MAP_HEIGHT / GRID_SIZE;  // 15
+const PLAYER_SPEED = 5;
+const INACTIVITY_TIMEOUT = 0; // 0 = 禁用闲置超时
+const MAX_MESSAGES = 10;
+
+// ===== 战斗/经济常量 =====
+const INIT_GOLD = 100;      // 玩家初始金币
+const INIT_ATTACK = 15;     // 初始攻击力
+const INIT_DEFENSE = 5;     // 初始防御力
+const INIT_HP = 100;        // 初始生命值
+const INIT_CRIT = 0.15;     // 初始暴击率
+const COMBO_COUNT = 3;      // 连击次数（普通攻击）
+const REVIVE_COST = 20;     // 复活花费金币
+
+// 生成地图瓦片（80% 草地, 20% 水域）
+function generateMap() {
+  const tiles = [];
+  // 使用固定种子保证地图一致性
+  const seed = 42;
+  let rng = seed;
+  const rand = () => {
+    rng = (rng * 1664525 + 1013904223) & 0xffffffff;
+    return (rng >>> 0) / 0xffffffff;
+  };
+
+  for (let row = 0; row < ROWS; row++) {
+    for (let col = 0; col < COLS; col++) {
+      const isWater = rand() < 0.20;
+      tiles.push({
+        x: col * GRID_SIZE,
+        y: row * GRID_SIZE,
+        type: isWater ? 'water' : 'grass',
+        walkable: !isWater
+      });
+    }
+  }
+  return tiles;
+}
+
+const mapTiles = generateMap();
+const walkableSet = new Set(
+  mapTiles
+    .filter(t => t.walkable)
+    .map(t => `${Math.floor(t.x / GRID_SIZE)},${Math.floor(t.y / GRID_SIZE)}`)
+);
+
+const gameState = {
+  players: {},
+  map: {
+    width: MAP_WIDTH,
+    height: MAP_HEIGHT,
+    tiles: mapTiles
+  },
+  messages: []
+};
+
+// 闲置计时器（已禁用，保留结构兼容性）
+const inactivityTimers = {};
+
+// ===== 工具函数 =====
+function getRandomColor() {
+  const hue = Math.floor(Math.random() * 360);
+  return `hsl(${hue}, 70%, 60%)`;
+}
+
+function getSpawnPosition() {
+  const grassTiles = mapTiles.filter(t => t.walkable);
+  const tile = grassTiles[Math.floor(Math.random() * grassTiles.length)];
+  return {
+    x: tile.x + GRID_SIZE / 2,
+    y: tile.y + GRID_SIZE / 2
+  };
+}
+
+function isWalkable(x, y) {
+  const col = Math.floor(x / GRID_SIZE);
+  const row = Math.floor(y / GRID_SIZE);
+  if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return false;
+  return walkableSet.has(`${col},${row}`);
+}
+
+function addSystemMessage(text) {
+  const msg = {
+    id: Date.now(),
+    player: 'System',
+    text,
+    timestamp: new Date().toTimeString().slice(0, 8),
+    type: 'system'
+  };
+  gameState.messages.push(msg);
+  if (gameState.messages.length > MAX_MESSAGES) {
+    gameState.messages.shift();
+  }
+  return msg;
+}
+
+function resetInactivityTimer(playerId) {
+  // 闲置超时已禁用，保留空函数供移动/聊天调用兼容
+}
+
+// ===== HTTP 路由 =====
+
+// 服务静态前端文件
+app.use(express.static(path.join(__dirname, '../client/public')));
+
+// 健康检查
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: Date.now(),
+    uptime: process.uptime()
+  });
+});
+
+// 回退路由（SPA）
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/public/index.html'));
+});
+
+// ===== WebSocket 事件处理 =====
+io.on('connection', (socket) => {
+  console.log(`[Socket] 客户端连接: ${socket.id}`);
+
+  // 玩家加入
+  socket.on('player-join', (data) => {
+    const name = (data && data.name || '匿名冒险者').trim().slice(0, 20);
+    if (!name) return;
+
+    const spawn = getSpawnPosition();
+    const player = {
+      id: socket.id,
+      name,
+      x: spawn.x,
+      y: spawn.y,
+      color: getRandomColor(),
+      lastUpdate: Date.now(),
+      // ===== 战斗/经济属性 =====
+      gold: INIT_GOLD,
+      hp: INIT_HP,
+      maxHp: INIT_HP,
+      attack: INIT_ATTACK,
+      defense: INIT_DEFENSE,
+      critRate: INIT_CRIT,
+      alive: true,
+      kills: 0
+    };
+
+    gameState.players[socket.id] = player;
+    resetInactivityTimer(socket.id);
+
+    // 发送完整游戏状态给新玩家
+    socket.emit('game-state', {
+      players: gameState.players,
+      map: gameState.map,
+      messages: gameState.messages
+    });
+
+    // 广播新玩家加入
+    socket.broadcast.emit('player-joined', player);
+
+    // 系统消息
+    const msg = addSystemMessage(`${name} 加入了游戏！`);
+    io.emit('new-message', msg);
+
+    console.log(`[Game] 玩家加入: ${name} (${socket.id})`);
+  });
+
+  // 玩家移动
+  socket.on('player-move', (data) => {
+    const player = gameState.players[socket.id];
+    if (!player) return;
+
+    const dx = Math.max(-50, Math.min(50, data.dx || 0));
+    const dy = Math.max(-50, Math.min(50, data.dy || 0));
+
+    let newX = player.x + dx;
+    let newY = player.y + dy;
+
+    // 边界约束
+    newX = Math.max(0, Math.min(MAP_WIDTH - PLAYER_SPEED, newX));
+    newY = Math.max(0, Math.min(MAP_HEIGHT - PLAYER_SPEED, newY));
+
+    // 碰撞检测
+    if (isWalkable(newX, newY)) {
+      player.x = newX;
+      player.y = newY;
+    } else {
+      // 尝试只移动 X 方向
+      if (isWalkable(newX, player.y)) {
+        player.x = newX;
+      }
+      // 尝试只移动 Y 方向
+      else if (isWalkable(player.x, newY)) {
+        player.y = newY;
+      }
+    }
+
+    player.lastUpdate = Date.now();
+    resetInactivityTimer(socket.id);
+
+    const moveData = { id: socket.id, x: player.x, y: player.y };
+    socket.broadcast.emit('player-moved', moveData);
+    socket.emit('player-moved', moveData); // 也告知自己，确认位置
+  });
+
+  // 发送聊天消息
+  socket.on('send-message', (data) => {
+    const player = gameState.players[socket.id];
+    if (!player) return;
+
+    const text = (data && data.text || '').trim().slice(0, 200);
+    if (!text) return;
+
+    const msg = {
+      id: Date.now(),
+      player: player.name,
+      text,
+      timestamp: new Date().toTimeString().slice(0, 8),
+      type: 'chat'
+    };
+
+    gameState.messages.push(msg);
+    if (gameState.messages.length > MAX_MESSAGES) {
+      gameState.messages.shift();
+    }
+
+    resetInactivityTimer(socket.id);
+    io.emit('new-message', msg);
+  });
+
+  // ===== 战斗攻击 =====
+  socket.on('player-attack', (data) => {
+    const attacker = gameState.players[socket.id];
+    const target   = data && data.targetId ? gameState.players[data.targetId] : null;
+    if (!attacker || !target || !attacker.alive || !target.alive) return;
+    if (attacker.id === target.id) return;
+
+    const dmg = calculateDamage(attacker.attack, target.defense, attacker.critRate);
+    const isCrit = dmg === attacker.attack; // 暴击时返回全额攻击值
+    target.hp = Math.max(0, target.hp - dmg);
+    const killed = target.hp === 0;
+
+    if (killed) {
+      target.alive = false;
+      attacker.kills += 1;
+      // 击杀奖励金币
+      attacker.gold += 30;
+    }
+
+    const combatResult = {
+      attackerId: attacker.id,
+      targetId:   target.id,
+      damage:     dmg,
+      isCrit,
+      targetHp:   target.hp,
+      killed,
+      attackerGold: attacker.gold,
+      attackerKills: attacker.kills
+    };
+
+    io.emit('combat-result', combatResult);
+    if (killed) {
+      const msg = addSystemMessage(`${attacker.name} 击败了 ${target.name}（+30💰）`);
+      io.emit('new-message', msg);
+    }
+  });
+
+  // ===== 连击攻击 =====
+  socket.on('player-combo', (data) => {
+    const attacker = gameState.players[socket.id];
+    const target   = data && data.targetId ? gameState.players[data.targetId] : null;
+    if (!attacker || !target || !attacker.alive || !target.alive) return;
+    if (attacker.id === target.id) return;
+
+    const totalDmg = calculateComboDamage(attacker.attack, target.defense, COMBO_COUNT);
+    target.hp = Math.max(0, target.hp - totalDmg);
+    const killed = target.hp === 0;
+
+    if (killed) {
+      target.alive = false;
+      attacker.kills += 1;
+      attacker.gold += 30;
+    }
+
+    const combatResult = {
+      attackerId: attacker.id,
+      targetId:   target.id,
+      damage:     totalDmg,
+      isCrit:     false,
+      isCombo:    true,
+      comboCount: COMBO_COUNT,
+      targetHp:   target.hp,
+      killed,
+      attackerGold: attacker.gold,
+      attackerKills: attacker.kills
+    };
+
+    io.emit('combat-result', combatResult);
+    if (killed) {
+      const msg = addSystemMessage(`${attacker.name} 对 ${target.name} 发动 ${COMBO_COUNT} 连击并将其击败！（+30💰）`);
+      io.emit('new-message', msg);
+    }
+  });
+
+  // ===== 花费金币复活 =====
+  socket.on('player-revive', () => {
+    const player = gameState.players[socket.id];
+    if (!player || player.alive) return;
+
+    const [newGold, success] = deductGold(player.gold, REVIVE_COST);
+    if (!success) {
+      socket.emit('revive-failed', { reason: '金币不足', need: REVIVE_COST, have: player.gold });
+      return;
+    }
+
+    player.gold = newGold;
+    player.hp   = player.maxHp;
+    player.alive = true;
+    const spawn = getSpawnPosition();
+    player.x = spawn.x;
+    player.y = spawn.y;
+
+    socket.emit('revive-success', { gold: player.gold, hp: player.hp, x: player.x, y: player.y });
+    io.emit('player-moved', { id: player.id, x: player.x, y: player.y });
+    const msg = addSystemMessage(`${player.name} 花费 ${REVIVE_COST}💰 复活了！`);
+    io.emit('new-message', msg);
+  });
+
+  // 断开连接
+  socket.on('disconnect', () => {
+    const player = gameState.players[socket.id];
+    clearTimeout(inactivityTimers[socket.id]);
+    delete inactivityTimers[socket.id];
+
+    if (player) {
+      delete gameState.players[socket.id];
+      io.emit('player-left', socket.id);
+
+      const msg = addSystemMessage(`${player.name} 离开了游戏`);
+      io.emit('new-message', msg);
+      console.log(`[Game] 玩家离开: ${player.name}`);
+    }
+  });
+});
+
+// ===== 导出供测试使用 =====
+const PORT = process.env.PORT || 3001;
+
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log(`🎮 MUD Game Server running on http://localhost:${PORT}`);
+    console.log(`📡 WebSocket ready on ws://localhost:${PORT}`);
+  });
+}
+
+module.exports = { app, server, io, gameState, deductGold, calculateDamage, calculateComboDamage };
